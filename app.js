@@ -156,43 +156,115 @@ document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
 async function ensurePdfLib(){
   if(!window.jspdf?.jsPDF)throw new Error("PDF 库加载失败，请检查网络连接");
 }
-function buildPdf(storeName){
-  const {jsPDF}=window.jspdf; const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+
+async function buildPdf(storeName){
+  if(!window.html2canvas) throw new Error("PDF 渲染库加载失败，请检查网络连接");
+  const {jsPDF}=window.jspdf;
   const month=$("#monthInput").value, invDate=$("#invoiceDateInput").value;
   const store=stores.find(s=>s.name===storeName)||{name:storeName,post:"",address:"",tel:""};
   const rows=records.filter(r=>r.store===storeName&&r.date.startsWith(month)).sort((a,b)=>a.date.localeCompare(b.date));
   const gross=rows.reduce((s,r)=>s+r.amount,0);
   const net=Math.floor(gross/1.08), tax=gross-net;
 
-  pdf.setFont("helvetica","bold");pdf.setFontSize(16);pdf.text("SEIKYUSHO",105,18,{align:"center"});
-  pdf.setFont("helvetica","normal");pdf.setFontSize(9);
-  let y=31; pdf.text(storeName,20,y); y+=5;
-  if(store.post){pdf.text("〒"+store.post,20,y);y+=4}
-  if(store.address){pdf.text(store.address,20,y);y+=4}
-  if(store.tel){pdf.text("TEL: "+store.tel,20,y)}
-  pdf.text("Date: "+fmt(invDate),132,31);pdf.text("No: "+invoiceNo(invDate),132,36);pdf.text("Reg: T9010001169651",132,41);
+  const root=document.getElementById("pdfRenderRoot");
+  const rowHtml = rows.map(r=>`
+    <tr>
+      <td>${fmt(r.date)}</td>
+      <td></td>
+      <td style="text-align:right">¥${Number(r.amount).toLocaleString("ja-JP")}</td>
+    </tr>`).join("");
 
-  pdf.setFont("helvetica","bold");pdf.text("Shokuiten Co., Ltd.",20,57);
-  pdf.setFont("helvetica","normal");pdf.text("〒104-0033",20,62);pdf.text("Tokyo Chuo-ku Shinkawa 1-3-4",20,67);pdf.text("TEL: 080-5504-2586",20,72);
+  const blanks = Math.max(0, 10-rows.length);
+  const blankHtml = Array.from({length:blanks},()=>`<tr><td>&nbsp;</td><td></td><td></td></tr>`).join("");
 
-  pdf.rect(20,80,170,19);pdf.line(92,80,92,99);pdf.line(130,80,130,99);
-  pdf.setFont("helvetica","bold");pdf.text("Bank",22,85);pdf.text("Due",94,85);pdf.text("Amount",132,85);
-  pdf.setFont("helvetica","normal");pdf.setFontSize(8);pdf.text("SMBC 034 / Ordinary 7776807",22,91);pdf.text("End of month",94,91);
-  pdf.setFontSize(13);pdf.setFont("helvetica","bold");pdf.text("JPY "+gross.toLocaleString(),132,93);
+  root.innerHTML = `
+  <div id="pdfSheet" style="
+      width:794px; min-height:1123px; padding:58px 54px 48px; background:#fff; color:#111;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Yu Gothic','YuGothic','Meiryo','Noto Sans JP','Noto Sans SC',sans-serif;
+      box-sizing:border-box;">
+    <div style="text-align:center;font-size:28px;font-weight:700;letter-spacing:2px;margin-bottom:34px">請求書</div>
 
-  let top=108; pdf.setFontSize(8);pdf.setFont("helvetica","bold");
-  pdf.text("Date",22,top);pdf.text("Detail",72,top);pdf.text("Amount",186,top,{align:"right"});pdf.line(20,111,190,111);
-  pdf.setFont("helvetica","normal"); let yy=117;
-  for(const r of rows){ if(yy>245){pdf.addPage();yy=20}
-    pdf.text(fmt(r.date),22,yy);pdf.text("",72,yy);pdf.text("JPY "+r.amount.toLocaleString(),186,yy,{align:"right"});pdf.line(20,yy+3,190,yy+3);yy+=9;
-  }
-  yy=Math.max(yy,205);pdf.rect(115,yy,75,24);pdf.line(155,yy,155,yy+24);pdf.line(115,yy+8,190,yy+8);pdf.line(115,yy+16,190,yy+16);
-  pdf.setFont("helvetica","bold");pdf.text("Total (tax incl.)",118,yy+5.5);pdf.setFont("helvetica","normal");pdf.text("Tax rate",118,yy+13.5);pdf.text("Included tax",118,yy+21.5);
-  pdf.text("JPY "+gross.toLocaleString(),187,yy+5.5,{align:"right"});pdf.text("8%",187,yy+13.5,{align:"right"});pdf.text("JPY "+tax.toLocaleString(),187,yy+21.5,{align:"right"});
+    <div style="display:flex;justify-content:space-between;gap:28px;font-size:13px;line-height:1.65">
+      <div style="width:58%">
+        <div style="font-size:20px;font-weight:700;margin-bottom:5px">${esc(store.name)}</div>
+        <div>${store.post?`〒${esc(store.post)}`:""}</div>
+        <div>${esc(store.address||"")}</div>
+        <div>${store.tel?`TEL: ${esc(store.tel)}`:""}</div>
+      </div>
+      <div style="width:38%;padding-top:3px">
+        <div>請求日　${fmt(invDate)}</div>
+        <div>請求書番号　${invoiceNo(invDate)}</div>
+        <div>登録番号　T9010001169651</div>
+      </div>
+    </div>
+
+    <div style="margin-top:28px;font-size:13px;line-height:1.6">
+      <div style="font-weight:700">請求元</div>
+      <div style="font-weight:700;font-size:15px">食為天株式会社</div>
+      <div>〒104-0033</div>
+      <div>東京都中央区新川1-3-4</div>
+      <div>TEL: 080-5504-2586</div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:28px;font-size:12px">
+      <thead>
+        <tr>
+          <th style="border:1px solid #111;padding:8px;text-align:left;width:48%">振込先</th>
+          <th style="border:1px solid #111;padding:8px;text-align:left;width:20%">入金期限</th>
+          <th style="border:1px solid #111;padding:8px;text-align:left;width:32%">請求金額</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="border:1px solid #111;padding:9px;vertical-align:top">
+            三井住友銀行　店番号034　普通預金　7776807<br>食為天株式会社 日本橋東支店
+          </td>
+          <td style="border:1px solid #111;padding:9px;vertical-align:top">今月末</td>
+          <td style="border:1px solid #111;padding:9px;font-size:20px;font-weight:700;vertical-align:top">¥${gross.toLocaleString("ja-JP")}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:24px;font-size:12px">
+      <thead>
+        <tr>
+          <th style="padding:7px 6px;border-bottom:1px solid #8d7a2b;text-align:left;width:28%">取引日</th>
+          <th style="padding:7px 6px;border-bottom:1px solid #8d7a2b;text-align:left">詳細</th>
+          <th style="padding:7px 6px;border-bottom:1px solid #8d7a2b;text-align:right;width:28%">金額（税込）</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowHtml}${blankHtml}
+      </tbody>
+    </table>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:36px">
+      <table style="width:320px;border-collapse:collapse;font-size:12px">
+        <tr><td style="border:1px solid #111;padding:8px;font-weight:700">合計（税込）</td><td style="border:1px solid #111;padding:8px;text-align:right;font-weight:700">¥${gross.toLocaleString("ja-JP")}</td></tr>
+        <tr><td style="border:1px solid #111;padding:8px">税率</td><td style="border:1px solid #111;padding:8px;text-align:right">8%</td></tr>
+        <tr><td style="border:1px solid #111;padding:8px">内消費税</td><td style="border:1px solid #111;padding:8px;text-align:right">¥${tax.toLocaleString("ja-JP")}</td></tr>
+      </table>
+    </div>
+  </div>`;
+
+  const sheet=root.querySelector("#pdfSheet");
+  await document.fonts.ready;
+  const canvas=await window.html2canvas(sheet,{
+    scale:2,
+    backgroundColor:"#ffffff",
+    useCORS:true,
+    logging:false
+  });
+
+  const imgData=canvas.toDataURL("image/jpeg",0.98);
+  const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"a4",compress:true});
+  const pageW=210, pageH=297;
+  pdf.addImage(imgData,"JPEG",0,0,pageW,pageH,undefined,"FAST");
+  root.innerHTML="";
   return pdf;
 }
 async function downloadOnePdf(storeName){
-  try{await ensurePdfLib();const pdf=buildPdf(storeName);pdf.save(`${safeName(storeName)}_${$("#monthInput").value}_請求書.pdf`)}
+  try{await ensurePdfLib();const pdf=await buildPdf(storeName);pdf.save(`${safeName(storeName)}_${$("#monthInput").value}_請求書.pdf`)}
   catch(e){$("#pdfStatus").textContent=e.message}
 }
 $("#downloadAllBtn").onclick=async()=>{
@@ -202,7 +274,7 @@ $("#downloadAllBtn").onclick=async()=>{
     if(!names.length){$("#pdfStatus").textContent="这个月没有记录。";return}
     $("#pdfStatus").textContent="正在生成全部 PDF…";
     const zip=new JSZip();
-    for(const name of names){const pdf=buildPdf(name);zip.file(`${safeName(name)}_${month}_請求書.pdf`,pdf.output("arraybuffer"))}
+    for(const name of names){const pdf=await buildPdf(name);zip.file(`${safeName(name)}_${month}_請求書.pdf`,pdf.output("arraybuffer"))}
     const blob=await zip.generateAsync({type:"blob"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`請求書_${month}_全部.zip`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
     $("#pdfStatus").textContent=`已生成 ${names.length} 家店的 PDF。`;
   }catch(e){$("#pdfStatus").textContent=e.message}
