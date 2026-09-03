@@ -35,6 +35,14 @@ const fmt=d=>{const [y,m,dd]=(d||"").split("-"); return d?`${y}/${Number(m)}/${N
 const safeName=s=>String(s).replace(/[\\/:*?"<>|]/g,"_");
 const invoiceNo=d=>d.replaceAll("-","")+"001";
 
+function nextDate(dateStr){
+  if(!dateStr) return dateStr;
+  const [y,m,d]=dateStr.split("-").map(Number);
+  const dt=new Date(y,m-1,d);
+  dt.setDate(dt.getDate()+1);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+}
+
 if(configured){
   app=initializeApp(firebaseConfig); auth=getAuth(app); db=getFirestore(app);
   onAuthStateChanged(auth, async u=>{
@@ -90,7 +98,9 @@ async function saveRecord(keepStore){
   try{
     await addDoc(collection(db,"users",user.uid,"records"),{store,date,amount,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
     $("#saveStatus").textContent=`已保存：${store} ${fmt(date)} ${yen(amount)}`; $("#amountInput").value="";
+    $("#dateInput").value=nextDate(date);
     if(!keepStore)$("#storeSelect").value="";
+    renderCurrent();
   }catch(e){$("#saveStatus").textContent="保存失败："+e.message}
 }
 $("#saveBtn").onclick=()=>saveRecord(false); $("#saveContinueBtn").onclick=()=>saveRecord(true);

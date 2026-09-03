@@ -1,4 +1,4 @@
-const CACHE="invoice-firebase-v3-cjk";
+const CACHE="invoice-firebase-v4-autonextdate";
 const CORE=["./","./index.html","./styles.css","./app.js","./manifest.webmanifest"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE))));
 self.addEventListener("activate",e=>e.waitUntil(self.clients.claim()));
