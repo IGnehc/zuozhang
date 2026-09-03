@@ -184,11 +184,11 @@ function buildPdf(storeName){
   pdf.text("Date",22,top);pdf.text("Detail",72,top);pdf.text("Amount",186,top,{align:"right"});pdf.line(20,111,190,111);
   pdf.setFont("helvetica","normal"); let yy=117;
   for(const r of rows){ if(yy>245){pdf.addPage();yy=20}
-    const n=Math.floor(r.amount/1.08);pdf.text(fmt(r.date),22,yy);pdf.text("",72,yy);pdf.text("JPY "+n.toLocaleString(),186,yy,{align:"right"});pdf.line(20,yy+3,190,yy+3);yy+=9;
+    pdf.text(fmt(r.date),22,yy);pdf.text("",72,yy);pdf.text("JPY "+r.amount.toLocaleString(),186,yy,{align:"right"});pdf.line(20,yy+3,190,yy+3);yy+=9;
   }
   yy=Math.max(yy,205);pdf.rect(115,yy,75,24);pdf.line(155,yy,155,yy+24);pdf.line(115,yy+8,190,yy+8);pdf.line(115,yy+16,190,yy+16);
-  pdf.setFont("helvetica","bold");pdf.text("Subtotal",118,yy+5.5);pdf.setFont("helvetica","normal");pdf.text("Tax 8%",118,yy+13.5);pdf.text("Tax",118,yy+21.5);
-  pdf.text("JPY "+net.toLocaleString(),187,yy+5.5,{align:"right"});pdf.text("8%",187,yy+13.5,{align:"right"});pdf.text("JPY "+tax.toLocaleString(),187,yy+21.5,{align:"right"});
+  pdf.setFont("helvetica","bold");pdf.text("Total (tax incl.)",118,yy+5.5);pdf.setFont("helvetica","normal");pdf.text("Tax rate",118,yy+13.5);pdf.text("Included tax",118,yy+21.5);
+  pdf.text("JPY "+gross.toLocaleString(),187,yy+5.5,{align:"right"});pdf.text("8%",187,yy+13.5,{align:"right"});pdf.text("JPY "+tax.toLocaleString(),187,yy+21.5,{align:"right"});
   return pdf;
 }
 async function downloadOnePdf(storeName){

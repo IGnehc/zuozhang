@@ -15,8 +15,6 @@
 
 ## 1. Firebase 设置
 
-本包已经写入 Firebase 项目 `billt-ef55b` 的 Web App 配置，不需要再修改 `firebase-config.js`。
-
 ### A. 创建 Web App
 Firebase Console → Project settings → Your apps → Web
 
@@ -70,3 +68,13 @@ Settings → Pages → Build and deployment
 ## 说明
 当前 PDF 为浏览器端直接生成，不依赖服务器。
 为了兼容 GitHub Pages，Firebase SDK、jsPDF、JSZip 使用 CDN，因此首次打开网页需要网络。
+
+
+## 修正版说明
+- Firebase 配置已重新按控制台原文写入：`bill-ef55b`
+- 明细金额直接使用录入的“税込金额”
+- 月度合计 = 所有录入税込金额直接相加
+- 消费税只在整张請求書最后统一反算一次：
+  - 税抜参考额 = floor(税込合计 / 1.08)
+  - 内含消费税 = 税込合计 - 税抜参考额
+- 不再对每一笔明细分别反算税额，因此不会产生逐笔舍入导致的 1～几円差额
