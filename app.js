@@ -25,6 +25,7 @@ const DEFAULT_STORES = [
 
 let app, auth, db, user=null, records=[], stores=[];
 let unsubRecords=null, unsubStores=null;
+let editingRecordId=null;
 
 const now = new Date();
 const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
@@ -96,14 +97,40 @@ async function saveRecord(keepStore){
   const store=$("#storeSelect").value, date=$("#dateInput").value, amount=Math.round(Number($("#amountInput").value));
   if(!store||!date||!amount||amount<=0){$("#saveStatus").textContent="请填写店铺、日期和有效金额。";return}
   try{
+    if(editingRecordId){
+      await updateDoc(doc(db,"users",user.uid,"records",editingRecordId),{store,date,amount,updatedAt:serverTimestamp()});
+      $("#saveStatus").textContent=`已修改：${store} ${fmt(date)} ${yen(amount)}`;
+      cancelEdit(false);
+      return;
+    }
     await addDoc(collection(db,"users",user.uid,"records"),{store,date,amount,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
     $("#saveStatus").textContent=`已保存：${store} ${fmt(date)} ${yen(amount)}`; $("#amountInput").value="";
     $("#dateInput").value=nextDate(date);
     if(!keepStore)$("#storeSelect").value="";
     renderCurrent();
-  }catch(e){$("#saveStatus").textContent="保存失败："+e.message}
+  }catch(e){$("#saveStatus").textContent=(editingRecordId?"修改失败：":"保存失败：")+e.message}
 }
-$("#saveBtn").onclick=()=>saveRecord(false); $("#saveContinueBtn").onclick=()=>saveRecord(true);
+function beginEdit(r){
+  editingRecordId=r.id;
+  $("#storeSelect").value=r.store;
+  $("#dateInput").value=r.date;
+  $("#amountInput").value=r.amount;
+  $("#saveBtn").textContent="保存修改";
+  $("#saveContinueBtn").textContent="取消修改";
+  $("#saveStatus").textContent=`正在修改：${r.store} ${fmt(r.date)} ${yen(r.amount)}`;
+  renderCurrent();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function cancelEdit(clearStatus=true){
+  editingRecordId=null;
+  $("#amountInput").value="";
+  $("#saveBtn").textContent="保存";
+  $("#saveContinueBtn").textContent="保存并继续这家店";
+  if(clearStatus)$("#saveStatus").textContent="已取消修改";
+  renderCurrent();
+}
+$("#saveBtn").onclick=()=>saveRecord(false);
+$("#saveContinueBtn").onclick=()=>editingRecordId?cancelEdit():saveRecord(true);
 $("#storeSelect").onchange=renderCurrent; $("#dateInput").onchange=renderCurrent; $("#monthInput").onchange=renderMonthly;
 
 function renderAll(){renderStoreSelect();renderRecords();renderCurrent();renderMonthly();renderStoreSettings()}
@@ -115,8 +142,10 @@ function renderRecords(){
   const body=$("#recordsBody");body.innerHTML="";
   records.slice(0,100).forEach(r=>{
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${esc(r.store)}</td><td>${fmt(r.date)}</td><td class="num">${yen(r.amount)}</td><td><button class="btn danger del">删除</button></td>`;
-    tr.querySelector(".del").onclick=async()=>{if(confirm("删除这条记录？"))await deleteDoc(doc(db,"users",user.uid,"records",r.id))};body.appendChild(tr)
+    tr.innerHTML=`<td>${esc(r.store)}</td><td>${fmt(r.date)}</td><td class="num">${yen(r.amount)}</td><td><button class="btn edit">编辑</button> <button class="btn danger del">删除</button></td>`;
+    tr.querySelector(".edit").onclick=()=>beginEdit(r);
+    tr.querySelector(".del").onclick=async()=>{if(confirm("删除这条记录？")){if(editingRecordId===r.id)cancelEdit(false);await deleteDoc(doc(db,"users",user.uid,"records",r.id))}};
+    body.appendChild(tr)
   });
   $("#recordCount").textContent=`${records.length} 条`;
 }
@@ -125,7 +154,13 @@ function renderCurrent(){
   $("#currentStoreLabel").textContent=store||"请选择店铺";const wrap=$("#currentStoreList");wrap.innerHTML="";
   const rows=records.filter(r=>r.store===store&&r.date.startsWith(month)).sort((a,b)=>a.date.localeCompare(b.date));
   $("#currentStoreTotal").textContent=yen(rows.reduce((s,r)=>s+r.amount,0));
-  rows.forEach(r=>{const d=document.createElement("div");d.className="mini-item";d.innerHTML=`<span>${fmt(r.date)}</span><b>${yen(r.amount)}</b>`;wrap.appendChild(d)})
+  rows.forEach(r=>{
+    const d=document.createElement("div");d.className="mini-item";
+    d.innerHTML=`<span>${fmt(r.date)}</span><span style="display:flex;align-items:center;gap:8px"><b>${yen(r.amount)}</b><button class="btn edit" style="min-height:34px;padding:0 10px">编辑</button><button class="btn danger del" style="min-height:34px;padding:0 10px">删除</button></span>`;
+    d.querySelector(".edit").onclick=()=>beginEdit(r);
+    d.querySelector(".del").onclick=async()=>{if(confirm("删除这条记录？")){if(editingRecordId===r.id)cancelEdit(false);await deleteDoc(doc(db,"users",user.uid,"records",r.id))}};
+    wrap.appendChild(d)
+  })
 }
 function renderMonthly(){
   const month=$("#monthInput").value, map=new Map();
@@ -143,11 +178,26 @@ function renderStoreSettings(){
     const box=document.createElement("div");box.className="store-card";
     box.innerHTML=`<div class="flex-between"><b>${esc(s.name)}</b><button class="btn danger remove">删除店铺</button></div>
       <div class="store-grid">
+        <div><label>店铺名称</label><input class="store-name" value="${attr(s.name||"")}"></div>
         <div><label>邮编</label><input class="post" value="${attr(s.post||"")}"></div>
         <div><label>地址</label><input class="address" value="${attr(s.address||"")}"></div>
         <div><label>电话</label><input class="tel" value="${attr(s.tel||"")}"></div>
       </div><div class="actions"><button class="btn save-store">保存资料</button></div>`;
-    box.querySelector(".save-store").onclick=()=>updateDoc(doc(db,"users",user.uid,"stores",s.id),{post:box.querySelector(".post").value.trim(),address:box.querySelector(".address").value.trim(),tel:box.querySelector(".tel").value.trim(),updatedAt:serverTimestamp()});
+    box.querySelector(".save-store").onclick=async()=>{
+      const oldName=s.name;
+      const newName=box.querySelector(".store-name").value.trim();
+      if(!newName){alert("店铺名称不能为空。");return}
+      if(newName!==oldName && stores.some(x=>x.id!==s.id && String(x.name||"").trim()===newName)){alert("这个店铺名称已经存在。");return}
+      try{
+        await updateDoc(doc(db,"users",user.uid,"stores",s.id),{name:newName,post:box.querySelector(".post").value.trim(),address:box.querySelector(".address").value.trim(),tel:box.querySelector(".tel").value.trim(),updatedAt:serverTimestamp()});
+        if(newName!==oldName){
+          const affected=records.filter(r=>r.store===oldName);
+          await Promise.all(affected.map(r=>updateDoc(doc(db,"users",user.uid,"records",r.id),{store:newName,updatedAt:serverTimestamp()})));
+          if($("#storeSelect").value===oldName) $("#storeSelect").value=newName;
+        }
+        alert("店铺资料已保存。"+(newName!==oldName?" 历史记录中的店铺名称也已同步修改。":""));
+      }catch(e){alert("保存店铺资料失败："+(e?.message||e))}
+    };
     box.querySelector(".remove").onclick=async()=>{if(confirm(`删除店铺「${s.name}」？历史记录不会删除。`))await deleteDoc(doc(db,"users",user.uid,"stores",s.id))};
     wrap.appendChild(box)
   });
