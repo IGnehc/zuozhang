@@ -153,8 +153,16 @@ function renderStoreSettings(){
   });
 }
 $("#addStoreBtn").onclick=async()=>{
-  const name=prompt("输入新店铺名称");if(!name)return;
-  await addDoc(collection(db,"users",user.uid,"stores"),{name:name.trim(),post:"",address:"",tel:"",createdAt:serverTimestamp()});
+  const name=prompt("输入新店铺名称");
+  if(!name || !name.trim()) return;
+  if(stores.some(s=>String(s.name||"").trim()===name.trim())){ alert("这个店铺已经存在。"); return; }
+  const post=prompt("邮编（可以留空）","") ?? "";
+  const address=prompt("地址（可以留空）","") ?? "";
+  const tel=prompt("电话（可以留空）","") ?? "";
+  try{
+    await addDoc(collection(db,"users",user.uid,"stores"),{name:name.trim(),post:post.trim(),address:address.trim(),tel:tel.trim(),createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+    alert(`店铺「${name.trim()}」已新增。`);
+  }catch(e){ alert("新增店铺失败："+(e?.message||e)); }
 };
 
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
